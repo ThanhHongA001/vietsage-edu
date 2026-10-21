@@ -1,0 +1,340 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum AttendanceMethod {
+  FACE
+  FINGERPRINT
+  CARD
+  MANUAL
+  UNKNOWN
+}
+
+enum AttendanceDirection {
+  CHECK_IN
+  CHECK_OUT
+  UNKNOWN
+}
+
+model User {
+  id            String         @id @default(uuid()) @db.Uuid
+  email         String         @unique
+  passwordHash  String
+  fullName      String
+  role          String         @default("STAFF")
+  status        UserStatus     @default(ACTIVE)
+  phone         String?
+  avatar        String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+  attendance    Attendance[]
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  tokenHash String    @unique
+  userId    String    @db.Uuid
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Teacher {
+  id            String   @id @default(uuid()) @db.Uuid
+  code          String   @unique
+  fullName      String
+  email         String   @unique
+  phone         String
+  department    String
+  homeroomClass String?
+  subjects      Json     @default("[]")
+  status        String   @default("ACTIVE")
+  avatar        String?
+  joinDate      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Student {
+  id                String               @id @default(uuid()) @db.Uuid
+  code              String               @unique
+  fullName          String
+  dob               String
+  gender            String
+  className         String
+  homeroomTeacher   String
+  parentName        String
+  parentPhone       String
+  address           String
+  status            String               @default("STUDYING")
+  avatar            String?
+  canteenRegistered Boolean              @default(false)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  attendances       Attendance[]
+  grades            Grade[]
+  submissions       HomeworkSubmission[]
+  leaveRequests     LeaveRequest[]
+}
+
+model Device {
+  id              String       @id @default(uuid()) @db.Uuid
+  deviceCode      String       @unique
+  name            String
+  location        String?
+  ipAddress       String?
+  status          String       @default("ONLINE")
+  isActive        Boolean      @default(true)
+  lastSeenAt      DateTime?
+  totalScansToday Int          @default(0)
+  createdAt       DateTime     @default(now())
+  attendance      Attendance[]
+}
+
+model Attendance {
+  id          String              @id @default(uuid()) @db.Uuid
+  eventId     String              @unique
+  userId      String?             @db.Uuid
+  studentId   String?             @db.Uuid
+  deviceId    String?             @db.Uuid
+  studentCode String?
+  studentName String?
+  className   String?
+  occurredAt  DateTime
+  checkInTime String?
+  checkOutTime String?
+  status      String?             @default("PRESENT")
+  method      AttendanceMethod    @default(UNKNOWN)
+  direction   AttendanceDirection @default(UNKNOWN)
+  note        String?
+  rawPayload  Json?
+  createdAt   DateTime            @default(now())
+  user        User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  student     Student?            @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  device      Device?             @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, occurredAt])
+  @@index([studentId, occurredAt])
+  @@index([deviceId, occurredAt])
+  @@index([className, occurredAt])
+}
+
+model LeaveRequest {
+  id          String   @id @default(uuid()) @db.Uuid
+  studentId   String?  @db.Uuid
+  studentName String
+  className   String
+  startDate   DateTime
+  endDate     DateTime
+  reason      String
+  phone       String
+  status      String   @default("PENDING")
+  reviewNote  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  student     Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([studentId])
+  @@index([className])
+}
+
+model Schedule {
+  id          String   @id @default(uuid()) @db.Uuid
+  dayOfWeek   Int
+  period      Int
+  timeRange   String
+  subject     String
+  className   String
+  room        String
+  teacherName String
+  createdAt   DateTime @default(now())
+
+  @@index([className, dayOfWeek])
+  @@index([teacherName, dayOfWeek])
+}
+
+model Grade {
+  id           String   @id @default(uuid()) @db.Uuid
+  studentId    String   @db.Uuid
+  studentCode  String
+  studentName  String
+  className    String
+  subject      String
+  semester     String   @default("HK1_2026_2027")
+  scoreOral1   Float?
+  scoreOral2   Float?
+  score15m1    Float?
+  score15m2    Float?
+  score1Period Float?
+  scoreMidTerm Float?
+  scoreFinal   Float?
+  averageScore Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, subject, semester])
+  @@index([className, subject])
+}
+
+model Homework {
+  id             String               @id @default(uuid()) @db.Uuid
+  title          String
+  subject        String
+  className      String
+  teacherId      String?
+  teacherName    String
+  assignedDate   DateTime             @default(now())
+  dueDate        DateTime
+  description    String
+  attachments    Json                 @default("[]")
+  isUrgent       Boolean              @default(false)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  submissions    HomeworkSubmission[]
+
+  @@index([className])
+  @@index([subject])
+}
+
+model HomeworkSubmission {
+  id          String    @id @default(uuid()) @db.Uuid
+  homeworkId  String    @db.Uuid
+  studentId   String?   @db.Uuid
+  studentName String
+  studentCode String?
+  submittedAt DateTime  @default(now())
+  status      String    @default("SUBMITTED")
+  content     String?
+  fileUrls    Json      @default("[]")
+  score       Float?
+  feedback    String?
+  gradedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  homework    Homework  @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  student     Student?  @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([homeworkId])
+  @@index([studentId])
+}
+
+model CanteenMeal {
+  id            String   @id @default(uuid()) @db.Uuid
+  dayId         String   @unique
+  date          String
+  dayOfWeek     String
+  mainDish      String
+  sideDish      String
+  soup          String
+  dessert       String
+  nutritionKcal Int
+  specialNote   String?
+  items         Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model CanteenRegistration {
+  id            String   @id @default(uuid()) @db.Uuid
+  studentId     String?  @db.Uuid
+  studentName   String
+  dayId         String
+  date          String
+  selectedItems Json     @default("[]")
+  isSaved       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@index([studentId])
+  @@index([dayId])
+}
+
+model UniformItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  name        String
+  category    String
+  gradeGroup  String
+  price       Int
+  inStock     Int
+  sizes       Json     @default("[]")
+  imageUrl    String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model UniformOrder {
+  id           String   @id @default(uuid()) @db.Uuid
+  orderCode    String   @unique
+  orderDate    DateTime @default(now())
+  status       String   @default("Chờ nhận tại trường")
+  items        Json     @default("[]")
+  totalAmount  Int
+  studentName  String
+  studentClass String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Event {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  date        String
+  location    String
+  tag         String
+  description String
+  icon        String?
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Announcement {
+  id             String   @id @default(uuid()) @db.Uuid
+  title          String
+  content        String
+  author         String
+  category       String   @default("TOÀN TRƯỜNG")
+  targetAudience String   @default("Toàn trường")
+  priority       String   @default("NORMAL")
+  imageUrl       String?
+  isNew          Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Setting {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

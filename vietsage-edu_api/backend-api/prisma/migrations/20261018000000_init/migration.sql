@@ -1,0 +1,21 @@
+-- Tạo enum cho trạng thái tài khoản và loại sự kiện chấm công.
+CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'DISABLED');
+CREATE TYPE "AttendanceMethod" AS ENUM ('FACE', 'FINGERPRINT', 'CARD', 'MANUAL', 'UNKNOWN');
+CREATE TYPE "AttendanceDirection" AS ENUM ('CHECK_IN', 'CHECK_OUT', 'UNKNOWN');
+CREATE TABLE "User" ("id" UUID NOT NULL, "email" TEXT NOT NULL, "passwordHash" TEXT NOT NULL, "fullName" TEXT NOT NULL, "role" TEXT NOT NULL DEFAULT 'STAFF', "status" "UserStatus" NOT NULL DEFAULT 'ACTIVE', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "User_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+CREATE TABLE "RefreshToken" ("id" UUID NOT NULL, "tokenHash" TEXT NOT NULL, "userId" UUID NOT NULL, "expiresAt" TIMESTAMP(3) NOT NULL, "revokedAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "RefreshToken_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "RefreshToken_tokenHash_key" ON "RefreshToken"("tokenHash");
+CREATE INDEX "RefreshToken_userId_idx" ON "RefreshToken"("userId");
+ALTER TABLE "RefreshToken" ADD CONSTRAINT "RefreshToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE TABLE "Device" ("id" UUID NOT NULL, "deviceCode" TEXT NOT NULL, "name" TEXT NOT NULL, "location" TEXT, "isActive" BOOLEAN NOT NULL DEFAULT true, "lastSeenAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "Device_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "Device_deviceCode_key" ON "Device"("deviceCode");
+CREATE TABLE "Attendance" ("id" UUID NOT NULL, "eventId" TEXT NOT NULL, "userId" UUID, "deviceId" UUID, "occurredAt" TIMESTAMP(3) NOT NULL, "method" "AttendanceMethod" NOT NULL DEFAULT 'UNKNOWN', "direction" "AttendanceDirection" NOT NULL DEFAULT 'UNKNOWN', "rawPayload" JSONB, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "Attendance_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "Attendance_eventId_key" ON "Attendance"("eventId");
+CREATE INDEX "Attendance_userId_occurredAt_idx" ON "Attendance"("userId", "occurredAt");
+CREATE INDEX "Attendance_deviceId_occurredAt_idx" ON "Attendance"("deviceId", "occurredAt");
+ALTER TABLE "Attendance" ADD CONSTRAINT "Attendance_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Attendance" ADD CONSTRAINT "Attendance_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES "Device"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+CREATE TABLE "AuditLog" ("id" UUID NOT NULL, "actorId" TEXT, "action" TEXT NOT NULL, "entityType" TEXT NOT NULL, "entityId" TEXT, "metadata" JSONB, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id"));
+CREATE INDEX "AuditLog_entityType_entityId_idx" ON "AuditLog"("entityType", "entityId");
+CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
